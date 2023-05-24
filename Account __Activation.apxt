@@ -1,0 +1,46 @@
+//cls declaration
+trigger forgit on Account (after insert) {
+    List<Task> tasksToCreate = new List<Task>();
+    List<Account> accountsToUpdate = new List<Account>();
+
+    for (Account acc : Trigger.new) {
+
+        acc.Active__c = false;
+
+        Task newTask = new Task(
+            WhatId = acc.Id,
+            Subject = 'Review Account - ' + acc.AccountNumber,
+            DueDate = System.today().addDays(7),
+            AssignedToId = acc.OwnerId,
+            Status = 'Not Started'
+        );
+        tasksToCreate.add(newTask);
+    }
+
+    insert tasksToCreate;
+
+    for (Task t : tasksToCreate) {
+        if (t.Status == 'Completed' && t.OwnerId.getSObjectType() == User.sObjectType &&
+            t.OwnerId.getDescribe().isPermissionable() && t.OwnerId.getPermissionSetId() == 'CQ Account Admin') {
+            // Only members of "CQ Account Admin" permission set can complete the Task
+            Account accToUpdate = new Account(
+                Id = t.WhatId,
+                Active__c = true
+            );
+            accountsToUpdate.add(accToUpdate);
+        }
+    }
+
+    for (Account acc : accountsToUpdate) {
+        for (Task t : tasksToCreate) {
+            if (t.WhatId == acc.Id && t.Status == 'Completed' && t.Description != null) {
+                acc.Description = t.Description;
+                break;
+            }
+        }
+    }
+
+    update accountsToUpdate;
+}
+
+}
